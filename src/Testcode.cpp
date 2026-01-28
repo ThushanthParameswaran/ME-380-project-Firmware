@@ -1,109 +1,199 @@
 #include <arduino.h>
+#include <util/atomic.h>  // For ATOMIC_BLOCK
 
+/* ------------------- MOTOR PINS ------------------- */
+#define ENCODER_A 2
+#define ENCODER_B 3
+#define PWM_PIN   9   // OC1A pin for Timer1
+#define IN1_PIN   8
+#define IN2_PIN   7
 
-// pin connections for stepper1
-#define dirPinSteppper1 4
-#define stepPinSteppper1 5
+volatile int posi = 0; // specify posi as volatile: https://www.arduino.cc/reference/en/language/variables/variable-scope-qualifiers/volatile/
 
-// pin connections for stepper2
-#define dirPinSteppper2 6
-#define stepPinSteppper2 7
+long prevT = 0;
 
-// pin connections for stepper3 (Base Motor)
-#define dirPinSteppper3 8
-#define stepPinSteppper3 9
+float eprev = 0;
 
-// pin COnnection for Encoder1
-#define endoer1chA 2
-#define endoer1chB 3
+float eintegral = 0;
 
-#define CPR 1024  // Encoder counts per full 360° rotation
-
-
-volatile long temp, counter = 0; //This variable will increase or decrease depending on the rotation of encoder
-
-
-
-
-// ---- REQUIRED FORWARD DECLARATIONS ----
-void ai0();
-void ai1();
 
 void setup() {
-  Serial.begin (9600);
 
-  pinMode(endoer1chA, INPUT_PULLUP);
-  pinMode(endoer1chB, INPUT_PULLUP);
+  Serial.begin(9600);
 
-  //Setting up interrupt
-  //A rising pulse from encodenren activated ai0(). AttachInterrupt 0 is DigitalPin nr 2 on moust Arduino.
-  attachInterrupt(0, ai0, RISING);
-   
-  //B rising pulse from encodenren activated ai1(). AttachInterrupt 1 is DigitalPin nr 3 on moust Arduino.
-  attachInterrupt(1, ai1, RISING);
+  pinMode(ENCODER_A,INPUT_PULLUP);
 
+  pinMode(ENCODER_B,INPUT_PULLUP);
 
+  attachInterrupt(digitalPinToInterrupt(ENCODER_A),readEncoder,RISING);
 
-
-  pinMode(dirPinSteppper1, OUTPUT);
-  pinMode(stepPinSteppper1, OUTPUT);
-
-  pinMode(dirPinSteppper2, OUTPUT);
-  pinMode(stepPinSteppper2, OUTPUT);
-
-  pinMode(dirPinSteppper3, OUTPUT);
-  pinMode(stepPinSteppper3, OUTPUT);
-
-
-  // set direction of rotation to clockwise
-  digitalWrite(dirPinSteppper1, HIGH);
-  digitalWrite(dirPinSteppper2, HIGH);
-  digitalWrite(dirPinSteppper3, HIGH);
-
-
-
-
-
-}
-
-void loop() {
-  // Send the value of counter
-  if( counter != temp ){
-    
-    Serial.println (counter);
-    temp = counter;
-  }
   
 
-  digitalWrite(stepPinSteppper1, HIGH);
-  digitalWrite(stepPinSteppper2, HIGH);
-  digitalWrite(stepPinSteppper3, HIGH);
-  delayMicroseconds(100);
+  pinMode(PWM_PIN,OUTPUT);
 
-  digitalWrite(stepPinSteppper1, LOW);
-  digitalWrite(stepPinSteppper2, LOW);
-  digitalWrite(stepPinSteppper3, LOW);
-  delayMicroseconds(100);
+  pinMode(IN1_PIN,OUTPUT);
 
+  pinMode(IN2_PIN,OUTPUT);
+
+  
+
+  Serial.println("target pos");
 
 }
 
-void ai0() {
-  // ai0 is activated if DigitalPin nr 2 is going from LOW to HIGH
-  // Check pin 3 to determine the direction
-  if(digitalRead(3)==LOW) {
-  counter++;
-  }else{
-  counter--;
+
+void loop() {
+
+
+  // set target position
+
+  int target = 12;
+
+  int target = 250*sin(prevT/1e6);
+
+
+  // PID constants
+
+  float kp = 1;
+
+  float kd = 0.025;
+
+  float ki = 0.0;
+
+
+  // time difference
+
+  long currT = micros();
+
+  float deltaT = ((float) (currT - prevT))/( 1.0e6 );
+
+  prevT = currT;
+
+
+  // Read the position in an atomic block to avoid a potential
+
+  // misread if the interrupt coincides with this code running
+
+  // see: https://www.arduino.cc/reference/en/language/variables/variable-scope-qualifiers/volatile/
+
+  int pos = 0; 
+
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+
+    pos = posi;
+
   }
+
+  
+
+  // error
+
+  int e = pos - target;
+
+
+  // derivative
+
+  float dedt = (e-eprev)/(deltaT);
+
+
+  // integral
+
+  eintegral = eintegral + e*deltaT;
+
+
+  // control signal
+
+  float u = kp*e + kd*dedt + ki*eintegral;
+
+
+  // motor power
+
+  float pwr = fabs(u);
+
+  if( pwr > 255 ){
+
+    pwr = 255;
+
   }
-   
-  void ai1() {
-  // ai0 is activated if DigitalPin nr 3 is going from LOW to HIGH
-  // Check with pin 2 to determine the direction
-  if(digitalRead(2)==LOW) {
-  counter--;
-  }else{
-  counter++;
+
+
+  // motor direction
+
+  int dir = 1;
+
+  if(u<0){
+
+    dir = -1;
+
   }
+
+
+  // signal the motor
+
+  setMotor(dir,pwr,PWM_PIN,IN1_PIN,IN2_PIN);
+
+
+
+  // store previous error
+
+  eprev = e;
+
+
+  Serial.print(target);
+
+  Serial.print(" ");
+
+  Serial.print(pos);
+
+  Serial.println();
+
+}
+
+
+void setMotor(int dir, int pwmVal, int pwm, int in1, int in2){
+
+  analogWrite(pwm,pwmVal);
+
+  if(dir == 1){
+
+    digitalWrite(in1,HIGH);
+
+    digitalWrite(in2,LOW);
+
   }
+
+  else if(dir == -1){
+
+    digitalWrite(in1,LOW);
+
+    digitalWrite(in2,HIGH);
+
+  }
+
+  else{
+
+    digitalWrite(in1,LOW);
+
+    digitalWrite(in2,LOW);
+
+  }  
+
+}
+
+
+void readEncoder(){
+
+  int b = digitalRead(ENCODER_B);
+
+  if(b > 0){
+
+    posi++;
+
+  }
+
+  else{
+
+    posi--;
+
+  }
+}

@@ -238,3 +238,154 @@ void loop() {
   }
 }
 
+
+
+
+
+
+
+/* ------------------- MOTION PARAMETERS ------------------- */
+#define THETA_TOTAL_DEG 40.0     // total rotation in degrees
+#define MOVE_TIME       3.0      // seconds
+#define CONTROL_DT      0.5    // 5 ms
+#define PWM_MAX         200
+#define INITIAL_PWM     128      // minimum to overcome friction
+
+#define COUNTS_PER_REV  3415.92/4 // encoder counts per full revolution
+#define DEG_PER_COUNT   (360.0 / COUNTS_PER_REV)
+
+/* ------------------- PID GAINS ------------------- */
+float Kp = 0.01;
+float Ki = 0.011;
+float Kd = 0.01;
+
+/* ------------------- GLOBAL VARIABLES ------------------- */
+volatile long encoderCount = 0;  // updated in ISR
+float theta_actual = 0;
+float theta_prev = 0;
+float omega_actual = 0;
+float integral_error = 0;
+
+float t = 0;
+unsigned long lastControlTime = 0;
+
+/* ------------------- ENCODER ISRs ------------------- */
+void encoderA_ISR() {
+  bool b = digitalRead(ENCODER_B);
+  encoderCount += b ? -1 : 1;
+}
+
+void encoderB_ISR() {
+  bool a = digitalRead(ENCODER_A);
+  encoderCount += a ? 1 : -1;
+}
+
+/* ------------------- MOTOR PWM SETUP ------------------- */
+void setupPWM(){
+  pinMode(PWM_PIN, OUTPUT);
+
+  // stop and clear Timer1
+  TCCR1A = 0;
+  TCCR1B = 0;
+
+  // fast PWM, 8-bit mode
+  TCCR1A |= (1 << WGM10);
+  TCCR1B |= (1 << WGM12);
+
+  // Clear OC1A on compare match, non-inverting
+  TCCR1A |= (1 << COM1A1);
+
+  // No prescaler → full speed
+  TCCR1B |= (1 << CS10);
+
+  // Start at 0 duty
+  OCR1A = 0;
+}
+
+/* ------------------- MOTOR CONTROL ------------------- */
+void setMotor(int dir, int pwmVal) {
+  // Limit PWM
+  if (pwmVal > PWM_MAX) pwmVal = PWM_MAX;
+  if (pwmVal < 0) pwmVal = 0;
+
+  // Apply minimum initial PWM if moving
+  if (pwmVal > 0 && pwmVal < INITIAL_PWM) pwmVal = INITIAL_PWM;
+
+  OCR1A = pwmVal;
+
+  if (dir >= 0) {
+    digitalWrite(IN1_PIN, HIGH);
+    digitalWrite(IN2_PIN, LOW);
+  } else {
+    digitalWrite(IN1_PIN, LOW);
+    digitalWrite(IN2_PIN, HIGH);
+  }
+}
+
+/* ------------------- SETUP ------------------- */
+void setup() {
+  Serial.begin(9600);
+
+  // Motor pins
+  pinMode(IN1_PIN, OUTPUT);
+  pinMode(IN2_PIN, OUTPUT);
+
+  // Encoder pins
+  pinMode(ENCODER_A, INPUT_PULLUP);
+  pinMode(ENCODER_B, INPUT_PULLUP);
+
+  // Attach interrupts (RISING only)
+  attachInterrupt(digitalPinToInterrupt(ENCODER_A), encoderA_ISR, RISING);
+  attachInterrupt(digitalPinToInterrupt(ENCODER_B), encoderB_ISR, RISING);
+
+  setupPWM();
+
+  lastControlTime = millis();
+}
+
+/* ------------------- LOOP ------------------- */
+void loop() {
+  unsigned long now = millis();
+  if ((now - lastControlTime) >= (CONTROL_DT * 1000)) {
+    lastControlTime = now;
+    t += CONTROL_DT;
+
+    if (t > MOVE_TIME) {
+      setMotor(0, 0); // stop motor
+      return;
+    }
+
+    // Read encoder atomically
+    long count;
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+      count = encoderCount;
+    }
+
+    // Convert to degrees
+    theta_actual = count * DEG_PER_COUNT;
+    omega_actual = (theta_actual - theta_prev) / CONTROL_DT;
+    theta_prev = theta_actual;
+
+    // ---- Sinusoidal trajectory ----
+    float phase = PI * t / MOVE_TIME;
+    float theta_ref = 0.5 * THETA_TOTAL_DEG * (1 - cos(phase));
+    float omega_ref = (THETA_TOTAL_DEG * PI / (2 * MOVE_TIME)) * sin(phase);
+
+    // ---- PID control ----
+    float pos_error = theta_ref - theta_actual;
+    integral_error += pos_error * CONTROL_DT;
+    float vel_error = omega_ref - omega_actual;
+    float control = Kp * pos_error + Ki * integral_error + Kd * vel_error;
+
+    int dir = (control >= 0) ? 1 : -1;
+    setMotor(dir, abs(control));
+
+    // Serial output
+    Serial.print(theta_ref, 2);
+    Serial.print(" ");
+    Serial.print(theta_actual, 2);
+    Serial.println();
+  }
+}
+
+
