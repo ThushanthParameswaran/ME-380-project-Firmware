@@ -1,0 +1,12 @@
+# PlatformIO
+.pio/
+.vscode/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.o
+*.elf
+*.hex

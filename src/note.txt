@@ -1,0 +1,240 @@
+// ---- REQUIRED FORWARD DECLARATIONS ----
+void ai0();
+void ai1();
+void speedControl();
+
+void loop() {
+  // Send the value of counter
+  if( counter != temp ){
+    angle = (360/CPR) * counter;
+    Serial.println (angle);
+    temp = counter;
+  }
+  
+  speedControl();
+  delay(1000);
+
+
+}
+
+void ai0() {
+  // ai0 is activated if DigitalPin nr 2 is going from LOW to HIGH
+  // Check pin 3 to determine the direction
+  if(digitalRead(3)==LOW) {
+  counter++;
+  }else{
+  counter--;
+  }
+}
+   
+void ai1() {
+  // ai0 is activated if DigitalPin nr 3 is going from LOW to HIGH
+  // Check with pin 2 to determine the direction
+  if(digitalRead(2)==LOW) {
+  counter--;
+  }else{
+  counter++;
+  }
+}
+
+// function to control the speed
+void speedControl() {
+  // Turn on motors
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, HIGH);
+
+
+
+  // Accelerate
+  for (uint8_t i = 0; i < 255; i++) {
+    OCR1A = i;   // RAW PWM duty cycle
+    delay(20);
+  }
+
+// Decelerate
+  for (int i = 255; i >= 0; i--) {
+    OCR1A = i;
+    delay(20);
+  }
+
+  // Now turn off motors
+  OCR1A=0;
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, LOW);
+}
+
+
+// PID control#include <arduino.h>
+
+// Motor A connections
+#define enA 9
+#define in1 8
+#define in2 7
+
+// pin COnnection for Encoder
+#define endoer1chA 2
+#define endoer1chB 3
+
+// Motion control
+#define THETA_TOTAL_DEG   40     // CHANGE PER MOTOR
+#define MOVE_TIME        3.0      // seconds
+#define CONTROL_DT       0.005    // 5 ms control loop
+
+#define PWM_MAX          200
+
+#define COUNTS_PER_REV 3415.92  // Encoder counts per full 360° rotation
+#define DEG_PER_COUNT    (360.0 / COUNTS_PER_REV)
+
+#define INITIAL_PWM 128  // Minimum PWM to overcome friction
+
+/* ------------------- CONTROL GAINS --------------------- */
+float Kp = 2.5;   // Position gain
+float Kd = 0.13;  // Velocity gain
+float Ki = 0.011;
+
+
+
+
+volatile long encoderCount = 0;  //This variable will increase or decrease depending on the rotation of encoder
+
+float theta_actual = 0;
+float theta_prev   = 0;
+float omega_actual = 0;
+float integral_error = 0;
+
+float t = 0;
+unsigned long lastControlTime = 0;
+
+
+/* ------------------- ENCODER ISRs ---------------------- */
+void encoderA_ISR() {
+  bool b = digitalRead(endoer1chB);
+  encoderCount += b ? -1 : 1;
+}
+
+void encoderB_ISR() {
+  bool a = digitalRead(endoer1chA);
+  encoderCount += a ? 1 : -1;
+}
+
+void setupPWM(){
+    // Set all the motor control pins to outputs
+  pinMode(enA, OUTPUT);
+
+
+  // stop and clear timer1
+  TCCR1A = 0;
+  TCCR1B = 0;
+
+  // fast PWM, 8 bit  
+  TCCR1A |= (1 << WGM10);
+  TCCR1B |= (1 << WGM12);
+
+  // Clear OC1A on compare match, non-inverting
+  TCCR1A |= (1 << COM1A1);
+
+  // No prescaler → full speed
+  TCCR1B |= (1 << CS10);
+
+  // Start at 0 duty
+  OCR1A = 0;
+
+}
+
+void applyPWM(float control) {
+
+  int pwm = abs(control);
+
+  // Add initial PWM if the motor is not moving yet
+  if (pwm > 0 && pwm < INITIAL_PWM) {
+    pwm = INITIAL_PWM;
+  }
+
+  if (control >= 0) {
+    digitalWrite(in1, HIGH);
+    digitalWrite(in2, LOW);
+  } else {
+    digitalWrite(in1, LOW);
+    digitalWrite(in2, HIGH);
+  }
+
+  OCR1A = pwm;
+}
+
+
+
+
+void setup() {
+  Serial.begin (9600);
+
+  // Set all the motor control pins to outputs
+  pinMode(in1, OUTPUT);
+  pinMode(in2, OUTPUT);
+
+  
+  pinMode(endoer1chA, INPUT_PULLUP);
+  pinMode(endoer1chB, INPUT_PULLUP);
+
+  //Setting up interrupt
+  //A rising pulse from encodenren activated ai0(). AttachInterrupt 0 is DigitalPin nr 2 on moust Arduino.
+  attachInterrupt(0, encoderA_ISR, CHANGE);
+   
+  //B rising pulse from encodenren activated ai1(). AttachInterrupt 1 is DigitalPin nr 3 on moust Arduino.
+  attachInterrupt(1, encoderB_ISR, CHANGE);
+
+  setupPWM();
+
+  lastControlTime = millis();
+
+}
+
+
+
+
+void loop() {
+    Serial.begin(9600);
+  unsigned long now = millis();
+
+  if ((now - lastControlTime) >= (CONTROL_DT * 1000)) {
+    lastControlTime = now;
+    t += CONTROL_DT;
+
+    if (t > MOVE_TIME) {
+      OCR1A = 0;  // Stop motor
+      return;
+    }
+
+
+    // ---- Read encoder ---- 
+    theta_actual = encoderCount * DEG_PER_COUNT;
+    omega_actual = (theta_actual - theta_prev) / CONTROL_DT;
+    theta_prev = theta_actual;
+
+
+
+    // ---- Sinusoidal trajectory ---- 
+    float phase = PI * t / MOVE_TIME;
+
+    float theta_ref =
+      0.5 * THETA_TOTAL_DEG * (1 - cos(phase));
+
+    float omega_ref =
+      (THETA_TOTAL_DEG * PI / (2 * MOVE_TIME)) * sin(phase);
+
+    // ---- PID control ---- 
+    float pos_error = theta_ref - theta_actual;
+    integral_error += pos_error * CONTROL_DT;  
+   
+    float vel_error = omega_ref - omega_actual;
+
+    float control = Kp * pos_error+ Ki * integral_error + Kd * vel_error;
+
+    if (control > PWM_MAX) control = PWM_MAX;
+    if (control < -PWM_MAX) control = -PWM_MAX;
+
+    applyPWM(control);
+
+ 
+  }
+}
+
