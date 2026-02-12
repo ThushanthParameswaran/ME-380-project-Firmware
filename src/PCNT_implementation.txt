@@ -1,0 +1,162 @@
+#include <Arduino.h>
+#include "driver/pcnt.h"
+
+// ------------------- PIN DEFINITIONS -------------------
+#define ENCODER_A  26    // input only pin (good choice)
+#define ENCODER_B  27     // input only pin
+
+#define PWM_PIN    32
+#define IN1_PIN    33
+#define IN2_PIN    25
+
+// ------------------- PWM SETTINGS -------------------
+#define PWM_FREQ       20000
+#define PWM_CHANNEL    0
+#define PWM_RESOLUTION 8
+
+// ------------------- PCNT SETTINGS -------------------
+#define PCNT_UNIT      PCNT_UNIT_0
+#define PCNT_H_LIM_VAL  32767
+#define PCNT_L_LIM_VAL -32768
+
+int target = 1048;
+int pwmPower = 100;
+
+// ------------------- SETUP PCNT -------------------
+void setupPCNT()
+{
+    pcnt_config_t pcnt_config = {};
+
+    pcnt_config.pulse_gpio_num = ENCODER_A;
+    pcnt_config.ctrl_gpio_num  = ENCODER_B;
+    pcnt_config.channel        = PCNT_CHANNEL_0;
+    pcnt_config.unit           = PCNT_UNIT;
+    pcnt_config.pos_mode       = PCNT_COUNT_INC;   // count up on rising
+    pcnt_config.neg_mode       = PCNT_COUNT_DIS;   // ignore falling
+    pcnt_config.lctrl_mode     = PCNT_MODE_REVERSE; // reverse if B low
+    pcnt_config.hctrl_mode     = PCNT_MODE_KEEP;    // keep if B high
+    pcnt_config.counter_h_lim  = PCNT_H_LIM_VAL;
+    pcnt_config.counter_l_lim  = PCNT_L_LIM_VAL;
+
+    pcnt_unit_config(&pcnt_config);
+
+    pcnt_counter_pause(PCNT_UNIT);
+    pcnt_counter_clear(PCNT_UNIT);
+    pcnt_counter_resume(PCNT_UNIT);
+}
+
+// ------------------- SETUP -------------------
+void setup()
+{
+    Serial.begin(115200);
+    delay(2000);
+    Serial.println("TEST");
+
+    pinMode(ENCODER_A, INPUT_PULLUP);
+    pinMode(ENCODER_B, INPUT_PULLUP);
+
+    pinMode(IN1_PIN, OUTPUT);
+    pinMode(IN2_PIN, OUTPUT);
+
+    // PWM setup
+    ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
+    ledcAttachPin(PWM_PIN, PWM_CHANNEL);
+
+    // PCNT setup
+    setupPCNT();
+}
+
+// ------------------- LOOP -------------------
+void loop()
+{
+    int16_t count = 0;
+    pcnt_get_counter_value(PCNT_UNIT, &count);
+
+    if (count < target)
+    {
+        digitalWrite(IN1_PIN, LOW);
+        digitalWrite(IN2_PIN, HIGH);
+        ledcWrite(PWM_CHANNEL, pwmPower);
+    }
+    else
+    {
+        digitalWrite(IN1_PIN, LOW);
+        digitalWrite(IN2_PIN, LOW);
+        ledcWrite(PWM_CHANNEL, 0);
+    }
+
+    Serial.print("Pos: ");
+    Serial.println(count);
+
+    delay(50);
+}
+
+
+
+
+
+
+
+
+
+
+// int clawPulse = 1000;  // claw servo (µs)
+// int upPulse   = 1000;  // up/down servo (µs)
+
+// void sendServoPulse(int pin, int width_us) {
+//   digitalWrite(pin, HIGH);
+//   delayMicroseconds(width_us);
+//   digitalWrite(pin, LOW);
+// }
+
+// void setup() {
+//   Serial.begin(9600);
+
+//   pinMode(dirPinSteppper1, OUTPUT);
+//   pinMode(stepPinSteppper1, OUTPUT);
+//   pinMode(claw, OUTPUT);
+//   pinMode(up, OUTPUT);
+
+//   digitalWrite(dirPinSteppper1, HIGH);
+
+//   Serial.println("G = claw 50°, H = claw 0°");
+//   Serial.println("A = up, S = down");
+// }
+
+// void loop() {
+
+//   if (Serial.available()) {
+//     char c = Serial.read();
+
+//     // ---- CLAW SERVO ----
+//     if (c == 'G' || c == 'g') {
+//       clawPulse = 1280;   // ~50°
+//       Serial.println("Claw -> 50°");
+//     }
+//     else if (c == 'H' || c == 'h') {
+//       clawPulse = 1000;   // 0°
+//       Serial.println("Claw -> 0°");
+//     }
+
+//     // ---- UP/DOWN SERVO ----
+//     else if (c == 'A' || c == 'a') {
+//       upPulse = 1800;     // UP
+//       Serial.println("Up servo -> UP");
+//     }
+//     else if (c == 'S' || c == 's') {
+//       upPulse = 1000;     // DOWN
+//       Serial.println("Up servo -> DOWN");
+//     }
+//   }
+
+//   // ---- send pulses to BOTH servos ----
+//   sendServoPulse(claw, clawPulse);
+//   sendServoPulse(up, upPulse);
+
+//   delayMicroseconds(20000); // 20 ms servo frame
+
+//   // ---- stepper pulse ----
+//   digitalWrite(stepPinSteppper1, HIGH);
+//   digitalWrite(stepPinSteppper1, LOW);
+//   delayMicroseconds(100);
+// }

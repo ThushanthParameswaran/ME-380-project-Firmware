@@ -1,199 +1,200 @@
-#include <arduino.h>
-#include <util/atomic.h>  // For ATOMIC_BLOCK
+// #include <arduino.h>
+// #include <util/atomic.h>  // For ATOMIC_BLOCK
 
-/* ------------------- MOTOR PINS ------------------- */
-#define ENCODER_A 2
-#define ENCODER_B 3
-#define PWM_PIN   9   // OC1A pin for Timer1
-#define IN1_PIN   8
-#define IN2_PIN   7
+// /* ------------------- MOTOR PINS ------------------- */
+// #define ENCODER_A 2
+// #define ENCODER_B 3
+// #define PWM_PIN   9   // OC1A pin for Timer1
+// #define IN1_PIN   8
+// #define IN2_PIN   7
 
-volatile int posi = 0; // specify posi as volatile: https://www.arduino.cc/reference/en/language/variables/variable-scope-qualifiers/volatile/
+// volatile int posi = 0; // specify posi as volatile: https://www.arduino.cc/reference/en/language/variables/variable-scope-qualifiers/volatile/
 
-long prevT = 0;
+// long prevT = 0;
 
-float eprev = 0;
+// float eprev = 0;
 
-float eintegral = 0;
+// float eintegral = 0;
 
 
-void setup() {
+// void setup() {
 
-  Serial.begin(9600);
+//   Serial.begin(9600);
 
-  pinMode(ENCODER_A,INPUT_PULLUP);
+//   pinMode(ENCODER_A,INPUT_PULLUP);
 
-  pinMode(ENCODER_B,INPUT_PULLUP);
+//   pinMode(ENCODER_B,INPUT_PULLUP);
 
-  attachInterrupt(digitalPinToInterrupt(ENCODER_A),readEncoder,RISING);
-
-  
-
-  pinMode(PWM_PIN,OUTPUT);
-
-  pinMode(IN1_PIN,OUTPUT);
-
-  pinMode(IN2_PIN,OUTPUT);
+//   attachInterrupt(digitalPinToInterrupt(ENCODER_A),readEncoder,RISING);
 
   
 
-  Serial.println("target pos");
+//   pinMode(PWM_PIN,OUTPUT);
 
-}
+//   pinMode(IN1_PIN,OUTPUT);
 
-
-void loop() {
-
-
-  // set target position
-
-  int target = 12;
-
-  int target = 250*sin(prevT/1e6);
-
-
-  // PID constants
-
-  float kp = 1;
-
-  float kd = 0.025;
-
-  float ki = 0.0;
-
-
-  // time difference
-
-  long currT = micros();
-
-  float deltaT = ((float) (currT - prevT))/( 1.0e6 );
-
-  prevT = currT;
-
-
-  // Read the position in an atomic block to avoid a potential
-
-  // misread if the interrupt coincides with this code running
-
-  // see: https://www.arduino.cc/reference/en/language/variables/variable-scope-qualifiers/volatile/
-
-  int pos = 0; 
-
-  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
-
-    pos = posi;
-
-  }
+//   pinMode(IN2_PIN,OUTPUT);
 
   
 
-  // error
+//   Serial.println("target pos");
 
-  int e = pos - target;
-
-
-  // derivative
-
-  float dedt = (e-eprev)/(deltaT);
+// }
 
 
-  // integral
-
-  eintegral = eintegral + e*deltaT;
+// void loop() {
 
 
-  // control signal
+//   // set target position
 
-  float u = kp*e + kd*dedt + ki*eintegral;
+//   int target = 12;
 
-
-  // motor power
-
-  float pwr = fabs(u);
-
-  if( pwr > 255 ){
-
-    pwr = 255;
-
-  }
+//   int target = 250*sin(prevT/1e6);
 
 
-  // motor direction
+//   // PID constants
 
-  int dir = 1;
+//   float kp = 1;
 
-  if(u<0){
+//   float kd = 0.025;
 
-    dir = -1;
-
-  }
+//   float ki = 0.0;
 
 
-  // signal the motor
+//   // time difference
 
-  setMotor(dir,pwr,PWM_PIN,IN1_PIN,IN2_PIN);
+//   long currT = micros();
 
+//   float deltaT = ((float) (currT - prevT))/( 1.0e6 );
 
-
-  // store previous error
-
-  eprev = e;
+//   prevT = currT;
 
 
-  Serial.print(target);
+//   // Read the position in an atomic block to avoid a potential
 
-  Serial.print(" ");
+//   // misread if the interrupt coincides with this code running
 
-  Serial.print(pos);
+//   // see: https://www.arduino.cc/reference/en/language/variables/variable-scope-qualifiers/volatile/
 
-  Serial.println();
+//   int pos = 0; 
 
-}
+//   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
 
+//     pos = posi;
 
-void setMotor(int dir, int pwmVal, int pwm, int in1, int in2){
+//   }
 
-  analogWrite(pwm,pwmVal);
+  
 
-  if(dir == 1){
+//   // error
 
-    digitalWrite(in1,HIGH);
-
-    digitalWrite(in2,LOW);
-
-  }
-
-  else if(dir == -1){
-
-    digitalWrite(in1,LOW);
-
-    digitalWrite(in2,HIGH);
-
-  }
-
-  else{
-
-    digitalWrite(in1,LOW);
-
-    digitalWrite(in2,LOW);
-
-  }  
-
-}
+//   int e = pos - target;
 
 
-void readEncoder(){
+//   // derivative
 
-  int b = digitalRead(ENCODER_B);
+//   float dedt = (e-eprev)/(deltaT);
 
-  if(b > 0){
 
-    posi++;
+//   // integral
 
-  }
+//   eintegral = eintegral + e*deltaT;
 
-  else{
 
-    posi--;
+//   // control signal
 
-  }
-}
+//   float u = kp*e + kd*dedt + ki*eintegral;
+
+
+//   // motor power
+
+//   float pwr = fabs(u);
+
+//   if( pwr > 255 ){
+
+//     pwr = 255;
+
+//   }
+
+
+//   // motor direction
+
+//   int dir = 1;
+
+//   if(u<0){
+
+//     dir = -1;
+
+//   }
+
+
+//   // signal the motor
+
+//   setMotor(dir,pwr,PWM_PIN,IN1_PIN,IN2_PIN);
+
+
+
+//   // store previous error
+
+//   eprev = e;
+
+
+//   Serial.print(target);
+
+//   Serial.print(" ");
+
+//   Serial.print(pos);
+
+//   Serial.println();
+
+// }
+
+
+// void setMotor(int dir, int pwmVal, int pwm, int in1, int in2){
+
+//   analogWrite(pwm,pwmVal);
+
+//   if(dir == 1){
+
+//     digitalWrite(in1,HIGH);
+
+//     digitalWrite(in2,LOW);
+
+//   }
+
+//   else if(dir == -1){
+
+//     digitalWrite(in1,LOW);
+
+//     digitalWrite(in2,HIGH);
+
+//   }
+
+//   else{
+
+//     digitalWrite(in1,LOW);
+
+//     digitalWrite(in2,LOW);
+
+//   }  
+
+// }
+
+
+// void readEncoder(){
+
+//   int b = digitalRead(ENCODER_B);
+
+//   if(b > 0){
+
+//     posi++;
+
+//   }
+
+//   else{
+
+//     posi--;
+
+//   }
+// }
+
