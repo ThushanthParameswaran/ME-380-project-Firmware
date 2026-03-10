@@ -1,0 +1,334 @@
+// #include <Arduino.h>
+
+// #define STEP_PIN 5
+// #define DIR_PIN  4
+// #define CLAW_PIN 9
+// #define UP_PIN   10
+
+// const int microstepsPerRev = 400;
+
+// long stepPosition = 0;
+
+// // Servo pulse widths (microseconds)
+// volatile int clawPulse = 1800;
+// volatile int upPulse   = 1700;
+
+// // Timing control
+// unsigned long lastServoTime = 0;
+// const unsigned long servoPeriod = 20000; // 20ms (50Hz)
+
+// // Stepper timing
+// unsigned long lastStepTime = 0;
+// int stepDelay = 500; // microseconds between step HIGH/LOW
+// bool stepState = false;
+// bool direction = true;
+// long stepsRemaining = 0;
+
+// void setup() {
+//   pinMode(STEP_PIN, OUTPUT);
+//   pinMode(DIR_PIN, OUTPUT);
+//   pinMode(CLAW_PIN, OUTPUT);
+//   pinMode(UP_PIN, OUTPUT);
+
+//   Serial.begin(115200);
+
+//   Serial.println("G = claw 50°, H = claw 0°");
+//   Serial.println("A = up, S = down");
+//   Serial.println("F = forward 1 rev, B = backward 1 rev");
+// }
+
+// void handleSerial() {
+//   if (Serial.available()) {
+//     char c = Serial.read();
+
+//     // ---- CLAW ----
+//     if (c == 'G' || c == 'g') {
+//       clawPulse = 1280;
+//       Serial.println("Claw -> 50°");
+//     }
+//     else if (c == 'H' || c == 'h') {
+//       clawPulse = 1000;
+//       Serial.println("Claw -> 0°");
+//     }
+
+//     // ---- UP/DOWN ----
+//     else if (c == 'A' || c == 'a') {
+//       upPulse = 1800;
+//       Serial.println("Up -> UP");
+//     }
+//     else if (c == 'S' || c == 's') {
+//       upPulse = 1000;
+//       Serial.println("Up -> DOWN");
+//     }
+
+//     // ---- STEPPER ----
+//     else if (c == 'F' || c == 'f') {
+//       direction = true;
+//       digitalWrite(DIR_PIN, direction);
+//       stepsRemaining = microstepsPerRev;
+//       Serial.println("Stepper -> Forward 1 rev");
+//     }
+//     else if (c == 'B' || c == 'b') {
+//       direction = false;
+//       digitalWrite(DIR_PIN, direction);
+//       stepsRemaining = microstepsPerRev;
+//       Serial.println("Stepper -> Backward 1 rev");
+//     }
+//   }
+// }
+
+// void updateStepper() {
+//   if (stepsRemaining <= 0) return;
+
+//   unsigned long now = micros();
+
+//   if (now - lastStepTime >= stepDelay) {
+//     lastStepTime = now;
+
+//     stepState = !stepState;
+//     digitalWrite(STEP_PIN, stepState);
+
+//     if (!stepState) {  
+//       // Count step only on falling edge
+//       stepsRemaining--;
+//       if (direction)
+//         stepPosition++;
+//       else
+//         stepPosition--;
+//     }
+//   }
+// }
+
+// void updateServos() {
+//   unsigned long now = micros();
+
+//   if (now - lastServoTime >= servoPeriod) {
+//     lastServoTime = now;
+
+//     // CLAW
+//     digitalWrite(CLAW_PIN, HIGH);
+//     delayMicroseconds(clawPulse);
+//     digitalWrite(CLAW_PIN, LOW);
+
+//     // UP
+//     digitalWrite(UP_PIN, HIGH);
+//     delayMicroseconds(upPulse);
+//     digitalWrite(UP_PIN, LOW);
+//   }
+// }
+
+// void loop() {
+//   handleSerial();
+//   updateStepper();
+//   updateServos();
+// }
+
+
+// // void setup() {
+// //   Serial.begin(9600);
+
+// //   pinMode(dirPinSteppper1, OUTPUT);
+// //   pinMode(stepPinSteppper1, OUTPUT);
+// //   pinMode(claw, OUTPUT);
+// //   pinMode(up, OUTPUT);
+
+// //   digitalWrite(dirPinSteppper1, HIGH);
+
+// //   Serial.println("G = claw 50°, H = claw 0°");
+// //   Serial.println("A = up, S = down");
+// // }
+
+// // void loop() {
+
+// //   if (Serial.available()) {
+// //     char c = Serial.read();
+
+// //     // ---- CLAW SERVO ----
+// //     if (c == 'G' || c == 'g') {
+// //       clawPulse = 1280;   // ~50°
+// //       Serial.println("Claw -> 50°");
+// //     }
+// //     else if (c == 'H' || c == 'h') {
+// //       clawPulse = 1000;   // 0°
+// //       Serial.println("Claw -> 0°");
+// //     }
+
+// //     // ---- UP/DOWN SERVO ----
+// //     else if (c == 'A' || c == 'a') {
+// //       upPulse = 1800;     // UP
+// //       Serial.println("Up servo -> UP");
+// //     }
+// //     else if (c == 'S' || c == 's') {
+// //       upPulse = 1000;     // DOWN
+// //       Serial.println("Up servo -> DOWN");
+// //     }
+// //   }
+
+// //   // ---- send pulses to BOTH servos ----
+// //   sendServoPulse(claw, clawPulse);
+// //   sendServoPulse(up, upPulse);
+
+// //   delayMicroseconds(20000); // 20 ms servo frame
+
+// //   // ---- stepper pulse ----
+// //   digitalWrite(stepPinSteppper1, HIGH);
+// //   digitalWrite(stepPinSteppper1, LOW);
+// //   delayMicroseconds(100);
+// // }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// // /* ------------------- PINS ------------------- */
+// // #define ENCODER_A 2
+// // #define ENCODER_B 3
+// // #define PWM_PIN   9
+// // #define IN1_PIN   8
+// // #define IN2_PIN   7
+// // #define SWITCH_PIN 5
+
+// // /* ------------------- ENCODER ------------------- */
+// // volatile long posi = 0;
+
+// // /* ------------------- PID ------------------- */
+// // float kp = 2.1;
+// // float kd = 0.19;
+// // float ki = 0.05;
+
+// // float eprev = 0;
+// // float eintegral = 0;
+// // long prevT = 0;
+
+// // /* ------------------- CONTROL ------------------- */
+// // int target = -60;    // CW target encoder position
+// // int deadband = 10;    // encoder counts
+// // int minPWM = 130;
+
+// // /* ------------------- ISR ------------------- */
+// // void readEncoderA() {
+// //   if (digitalRead(ENCODER_B)) posi++;
+// //   else posi--;
+// // }
+
+// // /* ------------------- SETUP ------------------- */
+// // void setup() {
+// //   Serial.begin(115200);
+
+// //   pinMode(ENCODER_A, INPUT_PULLUP);
+// //   pinMode(ENCODER_B, INPUT_PULLUP);
+// //   pinMode(SWITCH_PIN, INPUT_PULLUP);   // HIGH when pressed
+
+// //   attachInterrupt(digitalPinToInterrupt(ENCODER_A), readEncoderA, RISING);
+
+// //   pinMode(PWM_PIN, OUTPUT);
+// //   pinMode(IN1_PIN, OUTPUT);
+// //   pinMode(IN2_PIN, OUTPUT);
+
+// //   prevT = micros();
+
+// //   // CW
+// //   // digitalWrite(IN1_PIN, HIGH);
+// //   // digitalWrite(IN2_PIN, LOW);
+// //   // analogWrite(PWM_PIN, 130);
+// // }
+
+// // /* ------------------- LOOP ------------------- */
+// // void loop() {
+// //   if (Serial.available()) {
+// //     Serial.println(Serial.readStringUntil('\n'));
+// //   }
+
+// //   // Read encoder safely
+// //   int pos;
+// //   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+// //     pos = posi;
+// //   }
+
+// //   // Select target based on switch
+// //   int desired;
+// //   desired = target;
+
+
+  
+// //   // Time step
+// //   long currT = micros();
+// //   float deltaT = (currT - prevT) * 1e-6;
+// //   prevT = currT;
+// //   if (deltaT <= 0) return;
+
+// //   // Position error
+// //   int e = desired - pos;
+
+// //   if (abs(e) <= deadband) {
+// //     analogWrite(PWM_PIN, 0);
+
+// //     eintegral = 0;
+// //     eprev = 0;
+// //   }
+
+  
+
+// //   // PID
+// //   float dedt = (e - eprev) / deltaT;
+// //   eintegral += e * deltaT;
+// //   eintegral = constrain(eintegral, -300, 300);
+
+// //   float u = kp * e + kd * dedt + ki * eintegral;
+
+// //   // Position error
+ 
+
+// //   if (abs(e) <= deadband) {
+// //     analogWrite(PWM_PIN, 0);
+// //     digitalWrite(IN1_PIN, LOW);
+// //     digitalWrite(IN2_PIN, LOW);
+ 
+
+// //     eintegral = 0;
+// //     eprev = 0;
+// //     return;
+// //   }
+
+
+// //   // Direction from error sign
+// //   if (u > 0) {
+// //     // CW
+// //     digitalWrite(IN1_PIN, HIGH);
+// //     digitalWrite(IN2_PIN, LOW);
+// //   } else {
+// //     // CCW
+// //     digitalWrite(IN1_PIN, LOW);
+// //     digitalWrite(IN2_PIN, HIGH);
+// //   }
+
+// //   // Power with minimum PWM
+// //   float pwr = fabs(u);
+// //   pwr = constrain(pwr, minPWM, 200);
+// //   analogWrite(PWM_PIN, pwr);
+
+// //   eprev = e;
+
+// //   // long pos = 0;
+// //   // noInterrupts();
+// //   // pos = posi;
+// //   // interrupts();
+
+
+// //   // Debug
+// //   Serial.print("Desired: ");
+// //   Serial.print(desired);
+// //   Serial.print("  Pos: ");
+// //   Serial.println(pos);
+// //   delay(50);
+ 
+// // }
