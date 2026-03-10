@@ -8,30 +8,9 @@ const int microstepsPerRev = 3200;  // 200 * 16* Gear ratio
 
 long stepPosition = 0;  // Keeps track of current position
 
-void setup() {
-  pinMode(STEP_PIN, OUTPUT);
-  pinMode(DIR_PIN, OUTPUT);
- 
 
 
-  Serial.begin(115200);
-}
-
-void loop() {
-
-  // Example: Rotate 1 revolution forward
-  moveSteps(microstepsPerRev, true, 500);
-  delay(1000);
-
-  // Rotate 1 revolution backward
-  moveSteps(microstepsPerRev, false, 500);
-  delay(2000);
-
-  Serial.print("Current Step Position: ");
-  Serial.println(stepPosition);
-
-}
-
+int pause = 500;
 
 // direction = true (CW), false (CCW)
 // delayMicros controls speed (lower = faster)
@@ -53,6 +32,33 @@ void moveSteps(long steps, bool direction, int delayMicros) {
       stepPosition--;
   }
 }
+
+void setup() {
+  pinMode(STEP_PIN, OUTPUT);
+  pinMode(DIR_PIN, OUTPUT);
+ 
+
+
+  Serial.begin(115200);
+}
+
+void loop() {
+
+  // Example: Rotate 1 revolution forward
+  moveSteps(microstepsPerRev, true, pause);
+  delay(1000);
+
+  // Rotate 1 revolution backward
+  moveSteps(microstepsPerRev, false, pause);
+  delay(2000);
+
+  Serial.print("Current Step Position: ");
+  Serial.println(stepPosition);
+
+}
+
+
+
 
 
 
