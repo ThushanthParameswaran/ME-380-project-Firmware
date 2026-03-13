@@ -1,17 +1,17 @@
 import serial
 import time
 
-# Change COM port if needed
-ser = serial.Serial('COM3', 115200, timeout=1)
-
-time.sleep(2)  # wait for ESP32 reset
+ser = serial.Serial('COM3',115200)
+time.sleep(2)
 
 while True:
-    angle = input("Enter angle: ")
 
-    ser.write((angle + "\n").encode())
+    angle1 = input("Enter Motor 1 Angle: ")
+    angle2 = input("Enter Motor 2 Angle: ")
 
-    # Read response from ESP32
-    while ser.in_waiting:
-        line = ser.readline().decode().strip()
-        print(line)
+    command = f"{angle1},{angle2}\n"
+
+    ser.write(command.encode())
+    ser.flush()
+
+    print("Sent:", command.strip())

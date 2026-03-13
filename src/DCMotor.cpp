@@ -1,102 +1,132 @@
 #include "DCMotor.h"
 
-#define PCNT_UNIT PCNT_UNIT_0
-
 #define PWM_FREQ 20000
 #define PWM_RESOLUTION 8
-#define RPWM_CHANNEL 0
-#define LPWM_CHANNEL 1
 
-DCMotor::DCMotor(int encA, int encB, int rpwm, int lpwm)
+DCMotor::DCMotor(int encA, int encB, int rpwm, int lpwm,
+                 int rpwmCh, int lpwmCh,
+                 pcnt_unit_t unit, float countPerRev)
 {
-  encoderA = encA;
-  encoderB = encB;
-  rpwmPin = rpwm;
-  lpwmPin = lpwm;
+    encoderA = encA;
+    encoderB = encB;
+
+    rpwmPin = rpwm;
+    lpwmPin = lpwm;
+
+    rpwmChannel = rpwmCh;
+    lpwmChannel = lpwmCh;
+
+    pcntUnit = unit;
+    
+    cpr = countPerRev;
 }
 
 void DCMotor::begin()
 {
+    pinMode(rpwmPin, OUTPUT);
+    pinMode(lpwmPin, OUTPUT);
+    pinMode(encoderA, INPUT_PULLUP);
+    pinMode(encoderB, INPUT_PULLUP);
 
-  pinMode(encoderA, INPUT);
-  pinMode(encoderB, INPUT);
+    digitalWrite(rpwmPin, LOW);
+    digitalWrite(lpwmPin, LOW);
 
-  ledcSetup(RPWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
-  ledcAttachPin(rpwmPin, RPWM_CHANNEL);
+    ledcSetup(rpwmChannel, PWM_FREQ, PWM_RESOLUTION);
+    ledcAttachPin(rpwmPin, rpwmChannel);
 
-  ledcSetup(LPWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
-  ledcAttachPin(lpwmPin, LPWM_CHANNEL);
+    ledcSetup(lpwmChannel, PWM_FREQ, PWM_RESOLUTION);
+    ledcAttachPin(lpwmPin, lpwmChannel);
 
-  pcnt_config_t pcnt_config = {};
+    pcnt_config_t pcnt_config = {};
 
-  pcnt_config.pulse_gpio_num = encoderA;
-  pcnt_config.ctrl_gpio_num = encoderB;
+    pcnt_config.pulse_gpio_num = encoderA;
+    pcnt_config.ctrl_gpio_num = encoderB;
 
-  pcnt_config.unit = PCNT_UNIT;
-  pcnt_config.channel = PCNT_CHANNEL_0;
+    pcnt_config.unit = pcntUnit;
+    pcnt_config.channel = PCNT_CHANNEL_0;
 
-  pcnt_config.pos_mode = PCNT_COUNT_INC;
-  pcnt_config.neg_mode = PCNT_COUNT_DEC;
+    pcnt_config.pos_mode = PCNT_COUNT_INC;
+    pcnt_config.neg_mode = PCNT_COUNT_DEC;
 
-  pcnt_config.lctrl_mode = PCNT_MODE_REVERSE;
-  pcnt_config.hctrl_mode = PCNT_MODE_KEEP;
+    pcnt_config.lctrl_mode = PCNT_MODE_REVERSE;
+    pcnt_config.hctrl_mode = PCNT_MODE_KEEP;
 
-  pcnt_config.counter_h_lim = 32767;
-  pcnt_config.counter_l_lim = -32768;
+    pcnt_config.counter_h_lim = 32767;
+    pcnt_config.counter_l_lim = -32768;
 
-  pcnt_unit_config(&pcnt_config);
+    pcnt_unit_config(&pcnt_config);
 
-  pcnt_counter_pause(PCNT_UNIT);
-  pcnt_counter_clear(PCNT_UNIT);
-  pcnt_counter_resume(PCNT_UNIT);
+    pcnt_set_filter_value(pcntUnit, 10);
+    pcnt_filter_enable(pcntUnit);
 
-  prevTime = millis();
+    pcnt_counter_pause(pcntUnit);
+    pcnt_counter_clear(pcntUnit);
+    pcnt_counter_resume(pcntUnit);
+
+    prevTime = millis();
 }
 
 int DCMotor::getPosition()
 {
-  int16_t position;
-  pcnt_get_counter_value(PCNT_UNIT, &position);
-  return -position;
+    int16_t position;
+    pcnt_get_counter_value(pcntUnit, &position);
+    return position;
 }
 
 void DCMotor::moveToDegrees(float degrees)
 {
+    targetPosition = (degrees / 360.0) * cpr;
 
-  // 524 counts = 360 degrees
-  targetPosition = (degrees / 360.0) * 524;
+    // reset PID state
+    integral = 0;
+    prev_error = targetPosition - getPosition();
 }
 
 void DCMotor::update()
 {
+    int position = getPosition();
 
-  int position = getPosition();
+    unsigned long now = millis();
+    dt = (now - prevTime) / 1000.0;
+    prevTime = now;
 
-  unsigned long now = millis();
-  dt = (now - prevTime) / 1000.0;
-  prevTime = now;
+    // in case dt is 0
+    if (dt <= 0.0001) return;
 
-  error = targetPosition - position;
+    error = targetPosition - position;
 
-  integral += error * dt;
-  integral = constrain(integral, -5000, 5000);
+    if (abs(error) < 15)
+    {
+        ledcWrite(rpwmChannel, 0);
+        ledcWrite(lpwmChannel, 0);
+        return;
+    }
 
-  derivative = (error - prev_error) / dt;
+    integral += error * dt;
+    integral = constrain(integral, -5000, 5000);
 
-  output = kp * error + ki * integral + kd * derivative;
+    derivative = (error - prev_error) / dt;
 
-  prev_error = error;
+    output = kp * error + ki * integral + kd * derivative;
 
-  int pwm = constrain(abs(output), 0, 200);
+    prev_error = error;
 
-  if (output > 0)
-  {
-    ledcWrite(RPWM_CHANNEL, pwm);
-    ledcWrite(LPWM_CHANNEL, 0);
-  }
-  else
-  {
-    ledcWrite(RPWM_CHANNEL, 0);
-    ledcWrite(LPWM_CHANNEL, pwm);
-  }
+    int pwm = constrain(abs(output), 0, 150);
+
+    if (output > 0)
+    {
+        ledcWrite(rpwmChannel, pwm);
+        ledcWrite(lpwmChannel, 0);
+    }
+    else
+    {
+        ledcWrite(rpwmChannel, 0);
+        ledcWrite(lpwmChannel, pwm);
+    }
+}
+void DCMotor::setPID(float kp_val, float ki_val, float kd_val)
+{
+    kp = kp_val;
+    ki = ki_val;
+    kd = kd_val;
 }
